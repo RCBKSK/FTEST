@@ -5,7 +5,15 @@ const config = require('../config');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('hlp')
-        .setDescription('Display help information about SoulDraw commands'),
+        .setDescription('Display help information about SoulDraw commands')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('commands')
+                .setDescription('List all available commands'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('info')
+                .setDescription('Get information about the bot')),
 
     async execute(interaction) {
         // Check if user has admin role
