@@ -152,11 +152,22 @@ async function handleConfirmLottery(interaction, lotteryId) {
     startUpdateTimer();
 
     if (!lottery.isManualDraw) {
-        setTimeout(async () => {
+        const endTime = lottery.endTime;
+        const timeUntilEnd = endTime - Date.now();
+        
+        if (timeUntilEnd <= 0) {
             clearInterval(updateInterval);
-
-            if (lottery.status === 'active') {
-                const channel = await interaction.client.channels.fetch(lottery.channelId);
+            const channel = await interaction.client.channels.fetch(lottery.channelId);
+            await handleAutoDrawEnd(channel, lottery, interaction.client);
+        } else {
+            setTimeout(async () => {
+                clearInterval(updateInterval);
+                if (lottery.status === 'active') {
+                    const channel = await interaction.client.channels.fetch(lottery.channelId);
+                    await handleAutoDrawEnd(channel, lottery, interaction.client);
+                }
+            }, timeUntilEnd);
+        }tery.channelId);
 
                 if (lottery.minParticipants && lottery.participants.size < lottery.minParticipants) {
                     if (channel) {
@@ -371,3 +382,36 @@ async function handleTicketSelection(interaction, lotteryId, quantity) {
 module.exports = {
     handleButton
 };
+async function handleAutoDrawEnd(channel, lottery, client) {
+    if (!channel || lottery.status !== 'active') return;
+
+    if (lottery.minParticipants && lottery.participants.size < lottery.minParticipants) {
+        await updateLotteryMessage(channel, lottery.messageId, lottery, false);
+        await channel.send(`Lottery for ${lottery.prize} has ended with insufficient participants. Minimum required: ${lottery.minParticipants}`);
+        lotteryManager.cancelLottery(lottery.id);
+        return;
+    }
+
+    const winners = lotteryManager.drawWinners(lottery.id);
+    if (winners) {
+        const userMentions = new Map();
+        for (const winnerId of winners) {
+            try {
+                const user = await client.users.fetch(winnerId);
+                userMentions.set(winnerId, user.toString());
+                await notificationManager.notifyWinner(user, lottery, client);
+            } catch (error) {
+                console.error(`Failed to fetch user ${winnerId}:`, error);
+                userMentions.set(winnerId, 'Unknown User');
+            }
+        }
+
+        await updateLotteryMessage(channel, lottery.messageId, lottery, false);
+        await channel.send({
+            embeds: [
+                messageTemplates.createWinnerEmbed(lottery, winners, userMentions),
+                messageTemplates.createCongratulationsEmbed(lottery.prize, winners, userMentions)
+            ]
+        });
+    }
+}
