@@ -1,3 +1,4 @@
+
 const { Collection } = require('discord.js');
 const dataManager = require('./dataManager');
 
@@ -11,6 +12,29 @@ class SkullManager {
         
         // Restore data on startup
         this.restoreData();
+    }
+
+    loadData() {
+        try {
+            const data = dataManager.loadData('skulls.json');
+            if (data) {
+                Object.entries(data).forEach(([userId, balance]) => {
+                    this.userBalances.set(userId, balance);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading skull data:', error);
+        }
+    }
+
+    saveData() {
+        try {
+            const data = Object.fromEntries(this.userBalances);
+            dataManager.saveData('skulls.json', data);
+        } catch (error) {
+            console.error('Error saving skull data:', error);
+        }
+    }
 
     async restoreData() {
         try {
@@ -22,22 +46,6 @@ class SkullManager {
         }
     }
 
-    }
-
-    loadData() {
-        const data = dataManager.loadData('skulls.json');
-        if (data) {
-            Object.entries(data).forEach(([userId, balance]) => {
-                this.userBalances.set(userId, balance);
-            });
-        }
-    }
-
-    saveData() {
-        const data = Object.fromEntries(this.userBalances);
-        dataManager.saveData('skulls.json', data);
-    }
-
     getBalance(userId) {
         return this.userBalances.get(userId) || 0;
     }
@@ -45,6 +53,7 @@ class SkullManager {
     addSkulls(userId, amount) {
         const currentBalance = this.getBalance(userId);
         this.userBalances.set(userId, currentBalance + amount);
+        this.saveData();
         return this.getBalance(userId);
     }
 
@@ -54,6 +63,7 @@ class SkullManager {
             return false;
         }
         this.userBalances.set(userId, currentBalance - amount);
+        this.saveData();
         return true;
     }
 
