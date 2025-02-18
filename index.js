@@ -190,20 +190,26 @@ client.on("interactionCreate", async (interaction) => {
         } catch (error) {
             console.error(`Error executing ${interaction.commandName}:`);
             console.error(error);
-            if (!interaction.deferred && !interaction.replied) {
-                await interaction
-                    .reply({
+            try {
+                if (error.code === 40060) {
+                    // Interaction already acknowledged, skip trying to reply
+                    console.log('Interaction was already acknowledged');
+                    return;
+                }
+                
+                if (!interaction.deferred && !interaction.replied) {
+                    await interaction.reply({
                         content: "There was an error executing this command!",
                         ephemeral: true,
-                    })
-                    .catch(console.error);
-            } else {
-                await interaction
-                    .followUp({
+                    });
+                } else {
+                    await interaction.followUp({
                         content: "There was an error executing this command!",
                         ephemeral: true,
-                    })
-                    .catch(console.error);
+                    });
+                }
+            } catch (secondaryError) {
+                console.error('Failed to send error message:', secondaryError);
             }
         }
     }
