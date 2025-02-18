@@ -133,8 +133,27 @@ client.on("messageCreate", async (message) => {
     }
 });
 
+const rateLimits = new Map();
+
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isCommand() && !interaction.isButton()) return;
+
+    // Rate limiting
+    const userId = interaction.user.id;
+    const now = Date.now();
+    const cooldown = 3000; // 3 seconds cooldown
+
+    if (rateLimits.has(userId)) {
+        const lastInteraction = rateLimits.get(userId);
+        if (now - lastInteraction < cooldown) {
+            await interaction.reply({ 
+                content: 'Please wait a few seconds before using another command.',
+                ephemeral: true 
+            });
+            return;
+        }
+    }
+    rateLimits.set(userId, now);
 
     if (interaction.isCommand()) {
         const command = client.commands.get(interaction.commandName);
