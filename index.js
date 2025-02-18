@@ -242,6 +242,30 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
+// Handle reaction-based translations
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (user.bot) return;
+    if (reaction.emoji.name !== '🌐') return;
+
+    const message = reaction.message;
+    if (!message.content) return;
+
+    const userLang = languageManager.getUserPreference(user.id);
+    if (!userLang || userLang === 'en') return;
+
+    try {
+        const translated = await languageManager.translateMessage(message.content, userLang);
+        if (translated && translated.toLowerCase() !== message.content.toLowerCase()) {
+            await message.reply({
+                content: `Translation for ${user.toString()}: ${translated}`,
+                allowedMentions: { users: [user.id] }
+            });
+        }
+    } catch (error) {
+        console.error('Translation error:', error);
+    }
+});
+
 // Error handling for uncaught exceptions
 process.on("uncaughtException", (error) => {
     console.error("Uncaught Exception:", error);
