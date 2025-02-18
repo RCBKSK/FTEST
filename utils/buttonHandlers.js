@@ -5,38 +5,81 @@ const notificationManager = require('./notificationManager');
 const skullManager = require('./skullManager');
 
 async function handleButton(interaction) {
-    const [action, lotteryId, quantity] = interaction.customId.split('_');
-
     try {
-        switch (action) {
-            case 'ticket':
-                await handleTicketSelection(interaction, lotteryId, parseInt(quantity));
-                break;
-            case 'confirm':
-                await handleConfirmLottery(interaction, lotteryId);
-                break;
-            case 'cancel':
-                await handleCancelLottery(interaction, lotteryId);
-                break;
-            case 'join':
-                await handleJoinLottery(interaction, lotteryId);
-                break;
-            case 'view':
-                await handleViewParticipants(interaction, lotteryId);
-                break;
-            case 'auto':
-                await handleAutoDrawSetting(interaction, lotteryId);
-                break;
-            case 'manual':
-                await handleManualDrawSetting(interaction, lotteryId);
-                break;
+        // Add timeout for button interactions
+        const timeout = setTimeout(() => {
+            if (!interaction.replied && !interaction.deferred) {
+                interaction.reply({ content: 'The operation timed out.', ephemeral: true });
+            }
+        }, 10000);
+
+        // Handle the button interaction
+        const [action, lotteryId] = interaction.customId.split(':');
+
+        if (!lotteryId) {
+            clearTimeout(timeout);
+            return await interaction.reply({ content: 'Invalid lottery ID', ephemeral: true });
         }
+
+        const lottery = lotteryManager.getLottery(lotteryId);
+        if (!lottery) {
+            clearTimeout(timeout);
+            return await interaction.reply({ content: 'Lottery not found', ephemeral: true });
+        }
+
+        // Process based on action type
+        switch (action) {
+            case 'join':
+                await handleJoin(interaction, lotteryId);
+                break;
+            case 'leave':
+                await handleLeave(interaction, lotteryId);
+                break;
+            default:
+                await interaction.reply({ content: 'Invalid action', ephemeral: true });
+        }
+
+        clearTimeout(timeout);
     } catch (error) {
-        console.error('Button interaction error:', error);
+        console.error('Button handler error:', error);
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ 
+                content: 'An error occurred while processing your request.',
+                ephemeral: true 
+            });
+        }
+    }
+}
+
+async function handleJoin(interaction, lotteryId) {
+    const success = await lotteryManager.addParticipant(lotteryId, interaction.user.id);
+    if (success) {
         await interaction.reply({ 
-            content: 'There was an error processing your request. Please try again.',
+            content: 'You have successfully joined the lottery!',
             ephemeral: true 
-        }).catch(console.error);
+        });
+        await notificationManager.notifyJoin(interaction, lotteryId);
+    } else {
+        await interaction.reply({ 
+            content: 'You are already participating in this lottery.',
+            ephemeral: true 
+        });
+    }
+}
+
+async function handleLeave(interaction, lotteryId) {
+    const success = await lotteryManager.removeParticipant(lotteryId, interaction.user.id);
+    if (success) {
+        await interaction.reply({ 
+            content: 'You have left the lottery.',
+            ephemeral: true 
+        });
+        await notificationManager.notifyLeave(interaction, lotteryId);
+    } else {
+        await interaction.reply({ 
+            content: 'You are not participating in this lottery.',
+            ephemeral: true 
+        });
     }
 }
 
@@ -155,6 +198,7 @@ async function handleConfirmLottery(interaction, lotteryId) {
         const endTime = lottery.endTime;
         const timeUntilEnd = endTime - Date.now();
         
+
         if (timeUntilEnd <= 0) {
             clearInterval(updateInterval);
             const channel = await interaction.client.channels.fetch(lottery.channelId);
@@ -167,43 +211,7 @@ async function handleConfirmLottery(interaction, lotteryId) {
                     await handleAutoDrawEnd(channel, lottery, interaction.client);
                 }
             }, timeUntilEnd);
-        }tery.channelId);
-
-                if (lottery.minParticipants && lottery.participants.size < lottery.minParticipants) {
-                    if (channel) {
-                        await updateLotteryMessage(channel, lottery.messageId, lottery, false);
-                        await channel.send(`Lottery for ${lottery.prize} has ended with insufficient participants. Minimum required: ${lottery.minParticipants}`);
-                        lotteryManager.cancelLottery(lotteryId);
-                    }
-                    return;
-                }
-
-                const winners = lotteryManager.drawWinners(lotteryId);
-                if (channel && winners) {
-                    const userMentions = new Map();
-                    for (const winnerId of winners) {
-                        try {
-                            const user = await interaction.client.users.fetch(winnerId);
-                            userMentions.set(winnerId, user.toString());
-                            // Notify winner via DM
-                            await notificationManager.notifyWinner(user, lottery, interaction.client);
-                        } catch (error) {
-                            console.error(`Failed to fetch user ${winnerId}:`, error);
-                            userMentions.set(winnerId, 'Unknown User');
-                        }
-                    }
-
-                    await updateLotteryMessage(channel, lottery.messageId, lottery, false);
-
-                    await channel.send({
-                        embeds: [
-                            messageTemplates.createWinnerEmbed(lottery, winners, userMentions),
-                            messageTemplates.createCongratulationsEmbed(lottery.prize, winners, userMentions)
-                        ]
-                    });
-                }
-            }
-        }, lottery.endTime - Date.now());
+        }
     }
 }
 
